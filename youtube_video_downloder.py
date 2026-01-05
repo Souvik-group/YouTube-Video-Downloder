@@ -197,7 +197,78 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/download', methods=['POST'])
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
+
+@app.route('/video-info', methods=['POST'])
+def get_video_info():
+    session_id = ensure_session()
+    data = request.get_json(force=True) or {}
+    url = (data.get('url') or '').strip()
+    
+    if not url:
+        return jsonify({"status": "error", "message": "Please enter a YouTube URL"}), 400
+    
+    try:
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            
+            # Get available formats
+            formats = info.get('formats', [])
+            video_formats = []
+            audio_formats = []
+            
+            # Process video formats
+            seen_heights = set()
+            for f in formats:
+                if f.get('vcodec') != 'none' and f.get('acodec') != 'none':  # Video with audio
+                    height = f.get('height')
+                    if height and height not in seen_heights:
+                        filesize = f.get('filesize') or f.get('filesize_approx')
+                        if filesize:
+                            size_mb = round(filesize / (1024 * 1024), 1)
+                            quality_label = f"{height}p"
+                            if height >= 2160:
+                                quality_label = "4K"
+                            elif height >= 1440:
+                                quality_label = "2K"
+                            
+                            video_formats.append({
+                                'quality': str(height) + 'p',
+                                'label': quality_label,
+                                'size_mb': size_mb,
+                                'height': height
+                            })
+                            seen_heights.add(height)
+            
+            # Sort by quality (highest first)
+            video_formats.sort(key=lambda x: x['height'], reverse=True)
+            
+            # Add estimated audio sizes
+            audio_formats = [
+                {'quality': '320', 'label': '320kbps', 'size_mb': round(info.get('duration', 180) * 0.04, 1)},
+                {'quality': '256', 'label': '256kbps', 'size_mb': round(info.get('duration', 180) * 0.032, 1)},
+                {'quality': '192', 'label': '192kbps', 'size_mb': round(info.get('duration', 180) * 0.024, 1)},
+                {'quality': '128', 'label': '128kbps', 'size_mb': round(info.get('duration', 180) * 0.016, 1)},
+                {'quality': '96', 'label': '96kbps', 'size_mb': round(info.get('duration', 180) * 0.012, 1)}
+            ]
+            
+            return jsonify({
+                'status': 'success',
+                'title': info.get('title', 'Unknown'),
+                'duration': info.get('duration', 0),
+                'video_formats': video_formats[:6],  # Limit to 6 options
+                'audio_formats': audio_formats
+            })
+            
+    except Exception as e:
+        return jsonify({"status": "error", "message": "Could not fetch video information"}), 400
 def start_download():
     session_id = ensure_session()
     data = request.get_json(force=True) or {}

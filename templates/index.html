@@ -618,7 +618,7 @@
 
     <div class="section">
       <div class="section-title">🔗 Video URL</div>
-      <input type="text" class="url-input" id="url" placeholder="Paste YouTube video URL here..." />
+      <input type="text" class="url-input" id="url" placeholder="Paste YouTube video URL here..." onblur="fetchVideoInfo()" />
     </div>
 
     <div class="section">
@@ -721,7 +721,69 @@
     let statusInterval;
     let currentDownloadId = null;
 
-    function toggleQualityOptions() {
+    function fetchVideoInfo() {
+      const url = document.getElementById('url').value.trim();
+      if (!url) return;
+      
+      fetch('/video-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          updateQualityOptions(data);
+        }
+      })
+      .catch(() => {});
+    }
+    
+    function updateQualityOptions(data) {
+      const format = document.querySelector('input[name="format"]:checked').value;
+      
+      if (format === 'mp4' && data.video_formats) {
+        updateVideoQualities(data.video_formats);
+      } else if (format === 'mp3' && data.audio_formats) {
+        updateAudioQualities(data.audio_formats);
+      }
+    }
+    
+    function updateVideoQualities(formats) {
+      const container = document.getElementById('videoQualities');
+      container.innerHTML = '';
+      
+      formats.forEach((format, index) => {
+        const div = document.createElement('div');
+        div.className = 'option-card';
+        div.innerHTML = `
+          <input type="radio" name="quality" value="${format.quality}" id="${format.quality}" ${index === 2 ? 'checked' : ''}>
+          <label for="${format.quality}">
+            <div>${format.label}</div>
+            <div style="font-size: 10px; opacity: 0.7;">${format.size_mb}MB</div>
+          </label>
+        `;
+        container.appendChild(div);
+      });
+    }
+    
+    function updateAudioQualities(formats) {
+      const container = document.getElementById('audioQualities');
+      container.innerHTML = '';
+      
+      formats.forEach((format, index) => {
+        const div = document.createElement('div');
+        div.className = 'option-card';
+        div.innerHTML = `
+          <input type="radio" name="quality" value="${format.quality}" id="${format.quality}" ${index === 2 ? 'checked' : ''}>
+          <label for="${format.quality}">
+            <div>${format.label}</div>
+            <div style="font-size: 10px; opacity: 0.7;">${format.size_mb}MB</div>
+          </label>
+        `;
+        container.appendChild(div);
+      });
+    }
       const format = document.querySelector('input[name="format"]:checked').value;
       const videoQualities = document.getElementById('videoQualities');
       const audioQualities = document.getElementById('audioQualities');
